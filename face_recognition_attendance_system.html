@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VisionRoll - Face Recognition Attendance System</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Chart.js for Analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Google Fonts -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['Space Grotesk', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+              accent: '#38bdf8'
+            },
+            dark: {
+              bg: '#0b0f19',
+              card: '#111827',
+              border: '#1f2937',
+              hover: '#1e293b'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background-color: #0b0f19;
+      color: #f3f4f6;
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* Glassmorphism card styles */
+    .glass-card {
+      background: rgba(17, 24, 39, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    }
+
+    /* Laser Scanner Animation */
+    @keyframes scan {
+      0% { top: 0%; opacity: 0.8; }
+      50% { top: 95%; opacity: 1; }
+      100% { top: 0%; opacity: 0.8; }
+    }
+
+    .scanner-line {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, #38bdf8, #0ea5e9, #38bdf8, transparent);
+      box-shadow: 0 0 15px #38bdf8, 0 0 8px #0ea5e9;
+      animation: scan 2.5s infinite ease-in-out;
+      z-index: 20;
+    }
+
+    /* Face Target Box Pulse */
+    @keyframes pulse-box {
+      0%, 100% { border-color: rgba(56, 189, 248, 0.6); box-shadow: 0 0 10px rgba(56, 189, 248, 0.2); }
+      50% { border-color: rgba(56, 189, 248, 1); box-shadow: 0 0 20px rgba(56, 189, 248, 0.6); }
+    }
+
+    .face-box-active {
+      border: 2px dashed #38bdf8;
+      animation: pulse-box 1.5s infinite ease-in-out;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0b0f19;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1f2937;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #374151;
+    }
+  </style>
+</head>
+<body class="h-screen flex overflow-hidden">
+
+  <!-- SIDEBAR NAVIGATION -->
+  <aside class="w-64 glass-card border-r border-dark-border flex flex-direction-column justify-between flex-shrink-0 z-30 hidden md:flex flex-col">
+    <div>
+      <!-- Brand Logo -->
+      <div class="p-6 flex items-center gap-3 border-b border-dark-border">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-sky-400 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-sky-500/20">
+          <i class="fa-solid fa-face-smile"></i>
+        </div>
+        <div>
+          <h1 class="font-mono font-bold text-lg text-white tracking-wide">Vision<span class="text-brand-accent">Roll</span></h1>
+          <p class="text-xs text-gray-400">AI Attendance System</p>
+        </div>
+      </div>
+
+      <!-- Navigation Links -->
+      <nav class="p-4 space-y-1">
+        <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all bg-brand-600 text-white shadow-lg shadow-brand-600/30">
+          <i class="fa-solid fa-chart-pie w-5"></i>
+          Dashboard
+        </button>
+        <button onclick="switchTab('scanner')" id="nav-scanner" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm text-gray-400 hover:text-white hover:bg-dark-hover transition-all">
+          <i class="fa-solid fa-camera-retro w-5"></i>
+          Live Camera Scanner
+        </button>
+        <button onclick="switchTab('database')" id="nav-database" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm text-gray-400 hover:text-white hover:bg-dark-hover transition-all">
+          <i class="fa-solid fa-users w-5"></i>
+          Student Database
+        </button>
+        <button onclick="switchTab('logs')" id="nav-logs" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm text-gray-400 hover:text-white hover:bg-dark-hover transition-all">
+          <i class="fa-solid fa-list-check w-5"></i>
+          Attendance Logs
+        </button>
+      </nav>
+    </div>
+
+    <!-- System Status Footer -->
+    <div class="p-4 border-t border-dark-border">
+      <div class="bg-dark-bg p-3 rounded-xl border border-dark-border flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span class="text-xs text-gray-300 font-medium">Vision AI Engine</span>
+        </div>
+        <span class="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded font-mono">READY</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT AREA -->
+  <main class="flex-1 flex flex-col h-full overflow-hidden bg-dark-bg">
+    
+    <!-- Top Header -->
+    <header class="h-16 border-b border-dark-border px-6 flex items-center justify-between glass-card z-20">
+      <div class="flex items-center gap-4">
+        <!-- Mobile Menu Toggle Button -->
+        <button onclick="toggleMobileSidebar()" class="md:hidden text-gray-400 hover:text-white text-xl">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+        <h2 id="page-title" class="font-mono text-lg font-bold text-white">System Dashboard</h2>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <!-- Live Clock -->
+        <div class="hidden sm:flex items-center gap-2 bg-dark-bg px-3 py-1.5 rounded-lg border border-dark-border text-xs font-mono text-gray-300">
+          <i class="fa-regular fa-clock text-brand-accent"></i>
+          <span id="live-clock">--:--:-- PM</span>
+        </div>
+
+        <!-- Quick Register Action Button -->
+        <button onclick="openAddStudentModal()" class="bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium px-4 py-2 rounded-lg transition-all flex items-center gap-2 shadow-lg shadow-brand-600/20">
+          <i class="fa-solid fa-user-plus"></i>
+          <span class="hidden sm:inline">Register Student</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- TAB 1: DASHBOARD ANALYTICS -->
+    <section id="tab-dashboard" class="tab-content flex-1 overflow-y-auto p-6 space-y-6">
+      
+      <!-- Metrics Overview Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div class="glass-card p-5 rounded-2xl border border-dark-border">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-xs text-gray-400 font-medium">Total Registered</p>
+              <h3 id="stat-total-students" class="text-3xl font-mono font-bold text-white mt-1">12</h3>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
+              <i class="fa-solid fa-users text-lg"></i>
+            </div>
+          </div>
+          <div class="mt-3 text-xs text-gray-400 flex items-center gap-1">
+            <span class="text-emerald-400 font-medium"><i class="fa-solid fa-check-circle"></i> Active</span> Database Roster
+          </div>
+        </div>
+
+        <div class="glass-card p-5 rounded-2xl border border-dark-border">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-xs text-gray-400 font-medium">Present Today</p>
+              <h3 id="stat-present-today" class="text-3xl font-mono font-bold text-emerald-400 mt-1">9</h3>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+              <i class="fa-solid fa-user-check text-lg"></i>
+            </div>
+          </div>
+          <div class="mt-3 text-xs text-gray-400 flex items-center gap-1">
+            <span id="stat-present-pct" class="text-emerald-400 font-medium">75%</span> Attendance Rate
+          </div>
+        </div>
+
+        <div class="glass-card p-5 rounded-2xl border border-dark-border">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-xs text-gray-400 font-medium">Absent / Pending</p>
+              <h3 id="stat-absent-today" class="text-3xl font-mono font-bold text-rose-400 mt-1">3</h3>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center">
+              <i class="fa-solid fa-user-xmark text-lg"></i>
+            </div>
+          </div>
+          <div class="mt-3 text-xs text-gray-400">
+            Unmarked roster count
+          </div>
+        </div>
+
+        <div class="glass-card p-5 rounded-2xl border border-dark-border">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-xs text-gray-400 font-medium">Average Match Confidence</p>
+              <h3 id="stat-confidence" class="text-3xl font-mono font-bold text-brand-accent mt-1">98.4%</h3>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-400 flex items-center justify-center">
+              <i class="fa-solid fa-bolt text-lg"></i>
+            </div>
+          </div>
+          <div class="mt-3 text-xs text-gray-400">
+            Biometric Neural Encoding
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts Section -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main Line/Bar Chart -->
+        <div class="lg:col-span-2 glass-card p-6 rounded-2xl border border-dark-border flex flex-col justify-between">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-mono font-bold text-white">Weekly Attendance Trends</h3>
+            <span class="text-xs text-gray-400 bg-dark-bg px-3 py-1 rounded-lg border border-dark-border">Last 7 Days</span>
+          </div>
+          <div class="h-64 relative">
+            <canvas id="weeklyTrendChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Donut Distribution Chart -->
+        <div class="glass-card p-6 rounded-2xl border border-dark-border flex flex-col justify-between">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-mono font-bold text-white">Today's Status</h3>
+            <i class="fa-solid fa-chart-donut text-gray-400"></i>
+          </div>
+          <div class="h-64 relative flex items-center justify-center">
+            <canvas id="statusDonutChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Recent Scan Logs Table -->
+      <div class="glass-card rounded-2xl border border-dark-border overflow-hidden">
+        <div class="p-5 border-b border-dark-border flex justify-between items-center">
+          <h3 class="font-mono font-bold text-white">Recent Real-time Detections</h3>
+          <button onclick="switchTab('logs')" class="text-xs text-brand-accent hover:underline">View All Logs &rarr;</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-dark-bg/60 text-xs text-gray-400 uppercase font-mono border-b border-dark-border">
+              <tr>
+                <th class="py-3 px-5">Student</th>
+                <th class="py-3 px-5">Roll No</th>
+                <th class="py-3 px-5">Timestamp</th>
+                <th class="py-3 px-5">Confidence</th>
+                <th class="py-3 px-5">Status</th>
+              </tr>
+            </thead>
+            <tbody id="dashboard-recent-logs" class="divide-y divide-dark-border">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- TAB 2: LIVE CAMERA SCANNER -->
+    <section id="tab-scanner" class="tab-content flex-1 overflow-y-auto p-6 hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
+        
+        <!-- Main Camera Feed Window -->
+        <div class="lg:col-span-2 glass-card p-6 rounded-2xl border border-dark-border flex flex-col justify-between">
+          <div>
+            <!-- Camera Toolbar Header -->
+            <div class="flex flex-wrap justify-between items-center mb-4 gap-3">
+              <div>
+                <h3 class="font-mono font-bold text-white text-lg flex items-center gap-2">
+                  <span class="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></span>
+                  Biometric Vision Feed
+                </h3>
+                <p class="text-xs text-gray-400">Align face inside bounding region for automatic verification</p>
+              </div>
+
+              <!-- Controls -->
+              <div class="flex items-center gap-2">
+                <button id="btn-toggle-cam" onclick="toggleCamera()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-2">
+                  <i class="fa-solid fa-video"></i> Start Camera
+                </button>
+                <button id="btn-sim-scan" onclick="triggerManualRecognition()" class="bg-brand-600 hover:bg-brand-700 text-white text-xs px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-2">
+                  <i class="fa-solid fa-expand"></i> Simulate Match
+                </button>
+              </div>
+            </div>
+
+            <!-- Video Frame Container -->
+            <div class="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-dark-border flex items-center justify-center shadow-2xl">
+              <!-- Live Video Feed -->
+              <video id="webcam-video" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
+
+              <!-- Placeholder when camera is disabled -->
+              <div id="camera-placeholder" class="text-center p-8">
+                <div class="w-16 h-16 rounded-full bg-dark-hover flex items-center justify-center text-gray-500 mx-auto mb-3 text-2xl border border-dark-border">
+                  <i class="fa-solid fa-video-slash"></i>
+                </div>
+                <p class="text-sm text-gray-300 font-medium">Camera Feed Offline</p>
+                <p class="text-xs text-gray-500 mt-1 max-w-xs">Click "Start Camera" above to enable live face detection scanning.</p>
+              </div>
+
+              <!-- Scanner Overlay elements (Active during scan) -->
+              <div id="scanner-overlay" class="absolute inset-0 pointer-events-none hidden">
+                <div class="scanner-line"></div>
+                
+                <!-- Bounding Box HUD -->
+                <div id="target-bounding-box" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-56 rounded-2xl face-box-active flex flex-col justify-between p-2">
+                  <div class="flex justify-between text-[10px] text-brand-accent font-mono">
+                    <span>[TARGET_ACQUIRED]</span>
+                    <span id="hud-fps">30 FPS</span>
+                  </div>
+                  <div class="flex justify-between text-[10px] text-brand-accent font-mono">
+                    <span id="hud-status">MATCHING...</span>
+                    <span>128-D ENCODING</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Detection Alert Notification Bar -->
+              <div id="scan-alert-banner" class="absolute bottom-4 left-4 right-4 bg-emerald-500/90 backdrop-blur-md text-white p-3 rounded-xl flex items-center justify-between border border-emerald-400 transform translate-y-20 transition-all duration-300">
+                <div class="flex items-center gap-3">
+                  <img id="scan-alert-avatar" src="" class="w-10 h-10 rounded-lg object-cover border border-white/20" alt="Student Avatar">
+                  <div>
+                    <h4 id="scan-alert-name" class="font-bold text-sm">--</h4>
+                    <p id="scan-alert-roll" class="text-xs opacity-90">Roll: -- | Logged Present</p>
+                  </div>
+                </div>
+                <div class="text-right font-mono">
+                  <span id="scan-alert-confidence" class="bg-white/20 text-xs px-2 py-1 rounded">99.2% Match</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Camera Instructions -->
+          <div class="mt-4 bg-dark-bg p-3 rounded-xl border border-dark-border flex items-center justify-between text-xs text-gray-400">
+            <span class="flex items-center gap-2"><i class="fa-solid fa-circle-info text-brand-accent"></i> Stand 1-2 feet from camera in bright lighting.</span>
+            <span class="font-mono text-emerald-400">Anti-Spoofing: Active</span>
+          </div>
+        </div>
+
+        <!-- Live Scan Feed Log Panel -->
+        <div class="glass-card p-6 rounded-2xl border border-dark-border flex flex-col h-full">
+          <h3 class="font-mono font-bold text-white text-lg mb-2">Live Verification Stream</h3>
+          <p class="text-xs text-gray-400 mb-4">Real-time attendance events as faces are processed.</p>
+
+          <div id="live-stream-list" class="space-y-3 overflow-y-auto flex-1 pr-1">
+            <!-- Dynamically Logged Entry Items -->
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- TAB 3: STUDENT DATABASE -->
+    <section id="tab-database" class="tab-content flex-1 overflow-y-auto p-6 space-y-6 hidden">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h3 class="font-mono font-bold text-white text-xl">Student Biometric Database</h3>
+          <p class="text-xs text-gray-400">Manage registered student profiles, facial encodings, and status.</p>
+        </div>
+        
+        <div class="flex items-center gap-3 w-full sm:w-auto">
+          <!-- Search input -->
+          <div class="relative flex-1 sm:w-64">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs"></i>
+            <input type="text" id="db-search" oninput="renderDatabaseTable()" placeholder="Search name or roll no..." class="w-full bg-dark-bg border border-dark-border rounded-xl pl-9 pr-4 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          </div>
+
+          <button onclick="openAddStudentModal()" class="bg-brand-600 hover:bg-brand-700 text-white text-xs px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 whitespace-nowrap shadow-lg shadow-brand-600/20">
+            <i class="fa-solid fa-plus"></i> Add Student
+          </button>
+        </div>
+      </div>
+
+      <!-- Student Cards Grid -->
+      <div id="student-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+        <!-- Rendered via JS -->
+      </div>
+    </section>
+
+    <!-- TAB 4: ATTENDANCE LOGS -->
+    <section id="tab-logs" class="tab-content flex-1 overflow-y-auto p-6 space-y-6 hidden">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h3 class="font-mono font-bold text-white text-xl">Attendance Records Log</h3>
+          <p class="text-xs text-gray-400">Historical verified logs with timestamp & confidence metrics.</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+          <!-- Filter options -->
+          <input type="date" id="log-date-filter" onchange="renderLogsTable()" class="bg-dark-bg border border-dark-border text-gray-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-brand-500">
+
+          <button onclick="exportLogsCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 shadow-lg shadow-emerald-600/20">
+            <i class="fa-solid fa-file-csv"></i> Export CSV
+          </button>
+        </div>
+      </div>
+
+      <!-- Table Container -->
+      <div class="glass-card rounded-2xl border border-dark-border overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-dark-bg/80 text-xs text-gray-400 uppercase font-mono border-b border-dark-border">
+              <tr>
+                <th class="py-3 px-5">Student</th>
+                <th class="py-3 px-5">Roll No</th>
+                <th class="py-3 px-5">Department</th>
+                <th class="py-3 px-5">Date & Time</th>
+                <th class="py-3 px-5">Confidence</th>
+                <th class="py-3 px-5">Status</th>
+                <th class="py-3 px-5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="logs-table-body" class="divide-y divide-dark-border">
+              <!-- Dynamically Populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ADD / REGISTER STUDENT MODAL -->
+  <div id="modal-add-student" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="glass-card w-full max-w-md rounded-2xl border border-dark-border p-6 space-y-5 relative">
+      <div class="flex justify-between items-center border-b border-dark-border pb-3">
+        <h3 class="font-mono font-bold text-white text-lg">Register Student Biometrics</h3>
+        <button onclick="closeAddStudentModal()" class="text-gray-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <form id="form-add-student" onsubmit="handleAddStudent(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-300 mb-1">Full Name</label>
+          <input type="text" id="reg-name" required placeholder="e.g. Sarah Jenkins" class="w-full bg-dark-bg border border-dark-border rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-300 mb-1">Roll / ID Number</label>
+            <input type="text" id="reg-roll" required placeholder="e.g. CS-105" class="w-full bg-dark-bg border border-dark-border rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-300 mb-1">Department</label>
+            <select id="reg-dept" class="w-full bg-dark-bg border border-dark-border rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+              <option value="Computer Science">Computer Science</option>
+              <option value="Electrical Eng">Electrical Eng</option>
+              <option value="Mechanical Eng">Mechanical Eng</option>
+              <option value="Data Science">Data Science</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-gray-300 mb-1">Profile Avatar Image URL</label>
+          <input type="url" id="reg-avatar" placeholder="https://images.unsplash.com/..." class="w-full bg-dark-bg border border-dark-border rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+          <p class="text-[10px] text-gray-500 mt-1">Leave blank for automatic generate geometric avatar.</p>
+        </div>
+
+        <div class="pt-3 flex gap-3">
+          <button type="button" onclick="closeAddStudentModal()" class="flex-1 bg-dark-hover hover:bg-dark-border text-gray-300 text-xs py-2.5 rounded-xl font-medium transition-all">Cancel</button>
+          <button type="submit" class="flex-1 bg-brand-600 hover:bg-brand-700 text-white text-xs py-2.5 rounded-xl font-medium transition-all shadow-lg shadow-brand-600/20">Save &amp; Generate Encodings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    // --- INITIAL DATA STORE ---
+    let students = [
+      { id: 1, name: "Alexander Wright", roll: "CS-101", dept: "Computer Science", avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150" },
+      { id: 2, name: "Sophia Chen", roll: "CS-102", dept: "Data Science", avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150" },
+      { id: 3, name: "Marcus Johnson", roll: "EE-201", dept: "Electrical Eng", avatar: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150" },
+      { id: 4, name: "Emily Watson", roll: "CS-104", dept: "Computer Science", avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150" },
+      { id: 5, name: "David Miller", roll: "ME-301", dept: "Mechanical Eng", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150" }
+    ];
+
+    let attendanceLogs = [
+      { id: 101, studentId: 1, name: "Alexander Wright", roll: "CS-101", dept: "Computer Science", time: "09:02 AM", date: new Date().toISOString().split('T')[0], confidence: "99.4%", status: "Present" },
+      { id: 102, studentId: 2, name: "Sophia Chen", roll: "CS-102", dept: "Data Science", time: "09:05 AM", date: new Date().toISOString().split('T')[0], confidence: "98.8%", status: "Present" },
+      { id: 103, studentId: 3, name: "Marcus Johnson", roll: "EE-201", dept: "Electrical Eng", time: "09:12 AM", date: new Date().toISOString().split('T')[0], confidence: "97.5%", status: "Present" }
+    ];
+
+    let cameraStream = null;
+    let isScanningActive = false;
+    let weeklyChartInstance = null;
+    let donutChartInstance = null;
+
+    // --- ON LOAD INITIALIZATION ---
+    window.onload = function() {
+      updateClock();
+      setInterval(updateClock, 1000);
+      renderDashboard();
+      renderDatabaseTable();
+      renderLogsTable();
+      initCharts();
+    };
+
+    // --- NAVIGATION LOGIC ---
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('bg-brand-600', 'text-white', 'shadow-lg');
+        btn.classList.add('text-gray-400');
+      });
+
+      document.getElementById('tab-' + tabId).classList.remove('hidden');
+      const activeNav = document.getElementById('nav-' + tabId);
+      if(activeNav) {
+        activeNav.classList.add('bg-brand-600', 'text-white', 'shadow-lg');
+        activeNav.classList.remove('text-gray-400');
+      }
+
+      // Title update
+      const titles = {
+        'dashboard': 'System Dashboard & Analytics',
+        'scanner': 'Live Camera Scanner Verification',
+        'database': 'Registered Biometric Student Database',
+        'logs': 'Real-Time Attendance Activity Logs'
+      };
+      document.getElementById('page-title').innerText = titles[tabId] || 'Dashboard';
+    }
+
+    function toggleMobileSidebar() {
+      const sidebar = document.querySelector('aside');
+      sidebar.classList.toggle('hidden');
+      sidebar.classList.toggle('fixed');
+      sidebar.classList.toggle('inset-y-0');
+      sidebar.classList.toggle('left-0');
+    }
+
+    // --- LIVE CLOCK ---
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('live-clock').innerText = now.toLocaleTimeString();
+    }
+
+    // --- CAMERA & RECOGNITION SIMULATOR ---
+    async function toggleCamera() {
+      const video = document.getElementById('webcam-video');
+      const placeholder = document.getElementById('camera-placeholder');
+      const overlay = document.getElementById('scanner-overlay');
+      const btn = document.getElementById('btn-toggle-cam');
+
+      if (!cameraStream) {
+        try {
+          cameraStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+          video.srcObject = cameraStream;
+          video.classList.remove('hidden');
+          placeholder.classList.add('hidden');
+          overlay.classList.remove('hidden');
+          btn.innerHTML = `<i class="fa-solid fa-video-slash"></i> Stop Camera`;
+          btn.classList.replace('bg-emerald-600', 'bg-rose-600');
+          btn.classList.replace('hover:bg-emerald-700', 'hover:bg-rose-700');
+          isScanningActive = true;
+        } catch (err) {
+          alert("Webcam permission denied or camera unavailable. Using simulation mode.");
+        }
+      } else {
+        cameraStream.getTracks().forEach(track => track.stop());
+        cameraStream = null;
+        video.classList.add('hidden');
+        placeholder.classList.remove('hidden');
+        overlay.classList.add('hidden');
+        btn.innerHTML = `<i class="fa-solid fa-video"></i> Start Camera`;
+        btn.classList.replace('bg-rose-600', 'bg-emerald-600');
+        btn.classList.replace('hover:bg-rose-700', 'hover:bg-emerald-700');
+        isScanningActive = false;
+      }
+    }
+
+    function triggerManualRecognition() {
+      if (students.length === 0) {
+        alert("No students registered in database!");
+        return;
+      }
+
+      // Pick random student to detect
+      const randomStudent = students[Math.floor(Math.random() * students.length)];
+      const confidence = (96 + Math.random() * 3.9).toFixed(1) + "%";
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const todayDate = new Date().toISOString().split('T')[0];
+
+      // Check if already logged today
+      const existing = attendanceLogs.find(l => l.studentId === randomStudent.id && l.date === todayDate);
+      if (!existing) {
+        const newLog = {
+          id: Date.now(),
+          studentId: randomStudent.id,
+          name: randomStudent.name,
+          roll: randomStudent.roll,
+          dept: randomStudent.dept,
+          time: timeStr,
+          date: todayDate,
+          confidence: confidence,
+          status: "Present"
+        };
+        attendanceLogs.unshift(newLog);
+      }
+
+      // Show Banner HUD Alert
+      showScanAlert(randomStudent, confidence);
+      addLiveStreamItem(randomStudent, timeStr, confidence);
+
+      // Refresh UI Views
+      renderDashboard();
+      renderLogsTable();
+    }
+
+    function showScanAlert(student, confidence) {
+      const banner = document.getElementById('scan-alert-banner');
+      document.getElementById('scan-alert-avatar').src = student.avatar || 'https://placehold.co/100x100/1e293b/fff?text=' + student.name.charAt(0);
+      document.getElementById('scan-alert-name').innerText = student.name;
+      document.getElementById('scan-alert-roll').innerText = `Roll: ${student.roll} | Dept: ${student.dept}`;
+      document.getElementById('scan-alert-confidence').innerText = `${confidence} Match`;
+
+      banner.classList.remove('translate-y-20');
+      setTimeout(() => {
+        banner.classList.add('translate-y-20');
+      }, 3500);
+    }
+
+    function addLiveStreamItem(student, timeStr, confidence) {
+      const list = document.getElementById('live-stream-list');
+      const item = document.createElement('div');
+      item.className = "bg-dark-bg/80 border border-dark-border p-3 rounded-xl flex items-center justify-between transition-all animate-fade-in";
+      item.innerHTML = `
+        <div class="flex items-center gap-3">
+          <img src="${student.avatar || 'https://placehold.co/100x100/1e293b/fff?text=' + student.name.charAt(0)}" class="w-9 h-9 rounded-lg object-cover">
+          <div>
+            <h5 class="text-xs font-bold text-white">${student.name}</h5>
+            <p class="text-[10px] text-gray-400">${student.roll} • ${timeStr}</p>
+          </div>
+        </div>
+        <span class="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">${confidence}</span>
+      `;
+      list.prepend(item);
+    }
+
+    // --- RENDER FUNCTIONS ---
+    function renderDashboard() {
+      const total = students.length;
+      const todayDate = new Date().toISOString().split('T')[0];
+      const presentCount = attendanceLogs.filter(l => l.date === todayDate).length;
+      const absentCount = Math.max(0, total - presentCount);
+      const pct = total > 0 ? Math.round((presentCount / total) * 100) : 0;
+
+      document.getElementById('stat-total-students').innerText = total;
+      document.getElementById('stat-present-today').innerText = presentCount;
+      document.getElementById('stat-absent-today').innerText = absentCount;
+      document.getElementById('stat-present-pct').innerText = pct + "%";
+
+      // Render recent logs in dashboard preview
+      const recentTbody = document.getElementById('dashboard-recent-logs');
+      recentTbody.innerHTML = '';
+      attendanceLogs.slice(0, 4).forEach(log => {
+        recentTbody.innerHTML += `
+          <tr class="hover:bg-dark-hover/50">
+            <td class="py-3 px-5 font-medium text-white">${log.name}</td>
+            <td class="py-3 px-5 font-mono text-xs text-gray-400">${log.roll}</td>
+            <td class="py-3 px-5 text-xs text-gray-400">${log.time}</td>
+            <td class="py-3 px-5 font-mono text-xs text-brand-accent">${log.confidence}</td>
+            <td class="py-3 px-5"><span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-mono px-2 py-0.5 rounded">PRESENT</span></td>
+          </tr>
+        `;
+      });
+
+      updateCharts(presentCount, absentCount);
+    }
+
+    function renderDatabaseTable() {
+      const grid = document.getElementById('student-grid');
+      const query = document.getElementById('db-search').value.toLowerCase();
+      grid.innerHTML = '';
+
+      const filtered = students.filter(s => s.name.toLowerCase().includes(query) || s.roll.toLowerCase().includes(query));
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `<div class="col-span-full text-center py-8 text-gray-500 text-xs">No students found matching query.</div>`;
+        return;
+      }
+
+      filtered.forEach(s => {
+        grid.innerHTML += `
+          <div class="glass-card p-4 rounded-2xl border border-dark-border flex items-center justify-between gap-3 hover:border-brand-500/50 transition-all">
+            <div class="flex items-center gap-3">
+              <img src="${s.avatar || 'https://placehold.co/100x100/1e293b/fff?text=' + s.name.charAt(0)}" class="w-12 h-12 rounded-xl object-cover border border-dark-border">
+              <div>
+                <h4 class="text-sm font-bold text-white">${s.name}</h4>
+                <p class="text-xs font-mono text-brand-accent">${s.roll}</p>
+                <p class="text-[10px] text-gray-400">${s.dept}</p>
+              </div>
+            </div>
+            <button onclick="deleteStudent(${s.id})" class="text-gray-500 hover:text-rose-400 p-2 text-xs transition-all"><i class="fa-solid fa-trash"></i></button>
+          </div>
+        `;
+      });
+    }
+
+    function renderLogsTable() {
+      const tbody = document.getElementById('logs-table-body');
+      const dateFilter = document.getElementById('log-date-filter').value;
+      tbody.innerHTML = '';
+
+      let logsToDisplay = attendanceLogs;
+      if (dateFilter) {
+        logsToDisplay = logsToDisplay.filter(l => l.date === dateFilter);
+      }
+
+      if (logsToDisplay.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-gray-500 text-xs">No logs recorded for this selected filter.</td></tr>`;
+        return;
+      }
+
+      logsToDisplay.forEach(l => {
+        tbody.innerHTML += `
+          <tr class="hover:bg-dark-hover/50">
+            <td class="py-3 px-5 font-medium text-white">${l.name}</td>
+            <td class="py-3 px-5 font-mono text-xs text-gray-400">${l.roll}</td>
+            <td class="py-3 px-5 text-xs text-gray-400">${l.dept}</td>
+            <td class="py-3 px-5 text-xs text-gray-300 font-mono">${l.date} ${l.time}</td>
+            <td class="py-3 px-5 font-mono text-xs text-brand-accent">${l.confidence}</td>
+            <td class="py-3 px-5"><span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-mono px-2 py-0.5 rounded">PRESENT</span></td>
+            <td class="py-3 px-5 text-right"><button onclick="deleteLog(${l.id})" class="text-gray-500 hover:text-rose-400 text-xs"><i class="fa-solid fa-trash"></i></button></td>
+          </tr>
+        `;
+      });
+    }
+
+    // --- STUDENT MODAL & MANAGERS ---
+    function openAddStudentModal() {
+      document.getElementById('modal-add-student').classList.remove('hidden');
+    }
+
+    function closeAddStudentModal() {
+      document.getElementById('modal-add-student').classList.add('hidden');
+    }
+
+    function handleAddStudent(e) {
+      e.preventDefault();
+      const name = document.getElementById('reg-name').value;
+      const roll = document.getElementById('reg-roll').value;
+      const dept = document.getElementById('reg-dept').value;
+      const avatar = document.getElementById('reg-avatar').value || `https://placehold.co/150x150/1e293b/38bdf8?text=${name.charAt(0)}`;
+
+      const newStudent = {
+        id: Date.now(),
+        name,
+        roll,
+        dept,
+        avatar
+      };
+
+      students.push(newStudent);
+      closeAddStudentModal();
+      document.getElementById('form-add-student').reset();
+
+      renderDashboard();
+      renderDatabaseTable();
+    }
+
+    function deleteStudent(id) {
+      students = students.filter(s => s.id !== id);
+      renderDashboard();
+      renderDatabaseTable();
+    }
+
+    function deleteLog(id) {
+      attendanceLogs = attendanceLogs.filter(l => l.id !== id);
+      renderDashboard();
+      renderLogsTable();
+    }
+
+    // --- CSV EXPORTER ---
+    function exportLogsCSV() {
+      if (attendanceLogs.length === 0) {
+        alert("No log records available to export!");
+        return;
+      }
+
+      let csv = "ID,Student Name,Roll No,Department,Date,Time,Confidence,Status\n";
+      attendanceLogs.forEach(l => {
+        csv += `"${l.id}","${l.name}","${l.roll}","${l.dept}","${l.date}","${l.time}","${l.confidence}","${l.status}"\n`;
+      });
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `Attendance_Export_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // --- CHARTS INITIALIZATION ---
+    function initCharts() {
+      // Weekly Trend Line Chart
+      const ctxTrend = document.getElementById('weeklyTrendChart').getContext('2d');
+      weeklyChartInstance = new Chart(ctxTrend, {
+        type: 'line',
+        data: {
+          labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+          datasets: [{
+            label: 'Attendance Rate %',
+            data: [92, 88, 95, 91, 85, 75, 80],
+            borderColor: '#38bdf8',
+            backgroundColor: 'rgba(56, 189, 248, 0.1)',
+            fill: true,
+            tension: 0.4,
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af' } },
+            y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af' }, min: 50, max: 100 }
+          }
+        }
+      });
+
+      // Status Donut Chart
+      const ctxDonut = document.getElementById('statusDonutChart').getContext('2d');
+      donutChartInstance = new Chart(ctxDonut, {
+        type: 'doughnut',
+        data: {
+          labels: ['Present', 'Absent'],
+          datasets: [{
+            data: [9, 3],
+            backgroundColor: ['#10b981', '#f43f5e'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { color: '#9ca3af', font: { size: 11 } } }
+          },
+          cutout: '70%'
+        }
+      });
+    }
+
+    function updateCharts(present, absent) {
+      if (donutChartInstance) {
+        donutChartInstance.data.datasets[0].data = [present, absent];
+        donutChartInstance.update();
+      }
+    }
+  </script>
+</body>
+</html>
